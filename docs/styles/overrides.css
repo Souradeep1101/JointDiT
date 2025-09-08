@@ -1,0 +1,7 @@
+/* Notebook polish */
+.jp-InputPrompt, .jp-OutputPrompt, .prompt { display: none !important; }  /* hide In [ ]: */
+.md-typeset pre, .md-typeset code { font-size: .85rem; }                  /* tighter code */
+.jp-Cell .jp-InputArea-editor, .md-typeset pre { border-radius: 10px; }
+.md-typeset table { display: table; width: 100%; }                        /* full-width tables */
+.md-typeset .admonition { border-radius: 10px; }
+.md-sidebar--secondary { position: sticky; top: 64px; }                   /* sticky ToC */

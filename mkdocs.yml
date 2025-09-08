@@ -1,5 +1,8 @@
 site_name: JointDiT Docs
 site_description: From-scratch implementation and experimentation logs
+repo_url: https://github.com/Souradeep1101/JointDiT
+repo_name: Souradeep1101/JointDiT
+edit_uri: edit/main/docs/
 nav:
 - Overview: index.md
 - Getting Started: usage.md
@@ -7,33 +10,66 @@ nav:
 - Timeline: timeline.md
 - Changelog: changelog.md
 - Notebooks:
-  - 00_bootstrap_on_start: notebooks/00_bootstrap_on_start.ipynb
-  - 00_end_to_end_guide: notebooks/00_end_to_end_guide.ipynb
-  - 01_day1_walkthrough: notebooks/01_day1_walkthrough.ipynb
-  - 02_final_scripts_and_ui: notebooks/02_final_scripts_and_ui.ipynb
-  - 03_day3_unet_slicers_and_weights: notebooks/03_day3_unet_slicers_and_weights.ipynb
-  - 03_text_image_quickstart: notebooks/03_text_image_quickstart.ipynb
-  - day02_data_caching: notebooks/day02_data_caching.ipynb
-  - day04_jointdit: notebooks/day04_jointdit.ipynb
-  - day05_stageA_train: notebooks/day05_stageA_train.ipynb
-  - day06_infer_joint: notebooks/day06_infer_joint.ipynb
-  - day07_finetune_and_infer: notebooks/day07_finetune_and_infer.ipynb
+  - 00 Bootstrap On Start: notebooks/00_bootstrap_on_start.ipynb
+  - 00 End To End Guide: notebooks/00_end_to_end_guide.ipynb
+  - 01 Day1 Walkthrough: notebooks/01_day1_walkthrough.ipynb
+  - 02 Final Scripts And Ui: notebooks/02_final_scripts_and_ui.ipynb
+  - 03 Day3 Unet Slicers And Weights: notebooks/03_day3_unet_slicers_and_weights.ipynb
+  - 03 Text Image Quickstart: notebooks/03_text_image_quickstart.ipynb
+  - Day02 Data Caching: notebooks/day02_data_caching.ipynb
+  - Day04 Jointdit: notebooks/day04_jointdit.ipynb
+  - Day05 Stagea Train: notebooks/day05_stageA_train.ipynb
+  - Day06 Infer Joint: notebooks/day06_infer_joint.ipynb
+  - Day07 Finetune And Infer: notebooks/day07_finetune_and_infer.ipynb
 theme:
   name: material
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/file-document-multiple
+  font:
+    text: Inter
+    code: JetBrains Mono
+  palette:
+  - scheme: default
+    primary: indigo
+    accent: purple
+    toggle:
+      icon: material/weather-night
+      name: Switch to dark mode
+  - scheme: slate
+    primary: indigo
+    accent: purple
+    toggle:
+      icon: material/weather-sunny
+      name: Switch to light mode
   features:
   - navigation.instant
-  - navigation.sections
+  - navigation.tabs
+  - navigation.top
   - navigation.tracking
+  - header.autohide
+  - toc.integrate
   - content.code.copy
-  - search.highlight
-  - toc.follow
+  - content.code.annotate
+  - content.footnote.tooltips
 markdown_extensions:
-- admonition: null
-- attr_list: null
-- footnotes: null
+- admonition
+- attr_list
+- footnotes
 - toc:
     permalink: true
+- pymdownx.details
+- pymdownx.tabbed:
+    alternate_style: true
+- pymdownx.superfences
+- pymdownx.tasklist:
+    custom_checkbox: true
+- pymdownx.emoji:
+    emoji_generator: pymdownx.emoji.to_svg
 plugins:
-- search: null
+- search
 - mkdocs-jupyter:
     execute: false
+- glightbox: {}
+extra_css:
+- styles/overrides.css

@@ -2,33 +2,32 @@ name: CPU Smoke
 
 on:
   push:
+    branches: [ main ]
   pull_request:
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-    env:
-      PYTHONPATH: ${{ github.workspace }}   # ← imports see repo root
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install minimal deps for tests
         run: |
           python -m pip install --upgrade pip
-          # CPU wheels to keep it light; tests only need torch + yaml.
-          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.3.1
-          pip install pyyaml
-          # Optional but harmless (many modules import numpy)
-          pip install numpy
+          # tiny deps only; keep this fast
+          pip install -q pytest pyyaml
+          # CPU-only torch wheel for tests
+          pip install -q --index-url https://download.pytorch.org/whl/cpu torch==2.3.*
 
       - name: Run quick tests (CPU-only)
+        env:
+          PYTHONPATH: .
         run: |
           pytest -q tests

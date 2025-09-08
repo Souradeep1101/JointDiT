@@ -1623,7 +1623,9 @@
 - models/adapt_layers.py
 - models/aldm2_slicer.py
 - models/aldm_unet_slicer.py
+- models/cond/__init__.py
 - models/cond/clip_cond.py
+- models/joint/__init__.py
 - models/joint/joint_block.py
 - models/joint/perceiver_joint_attn.py
 - models/joint/rope.py
@@ -1676,6 +1678,7 @@
 - runs/day07_stage_b_smoke/events.out.tfevents.1757127231.4171dc255c2e.5412.0
 - runs/day07_stage_b_smoke/events.out.tfevents.1757128445.4171dc255c2e.5897.0
 - scripts/README.md
+- scripts/__init__.py
 - scripts/aldm2/coerce_cross_dim.py
 - scripts/aldm2/fetch_and_probe_variants.py
 - scripts/aldm2/force_cross_everywhere.py
@@ -1694,6 +1697,7 @@
 - scripts/finals/infer.sh
 - scripts/finals/train.sh
 - scripts/finals/train_entry.py
+- scripts/infer/__init__.py
 - scripts/infer/infer_joint.py
 - scripts/smoke/aldm2_smoke.py
 - scripts/smoke/aldm2_smoke_strict.py
@@ -1707,6 +1711,7 @@
 - scripts/tools/fetch_models.py
 - scripts/tools/install_system_deps.sh
 - scripts/tools/report_ckpt_usage.py
+- scripts/train/__init__.py
 - scripts/train/train_stage_a.py
 - scripts/train/train_stage_b.py
 - scripts/train/val_step.py

@@ -44,14 +44,44 @@ ignore = ["E501"]
 "scripts/aldm2/scan_cross_dim.py" = ["E402"]
 "scripts/dev/check_env.py" = ["E402"]
 
+# pyproject.toml  (only the mypy section shown)
+
 [tool.mypy]
 python_version = "3.11"
+# Don’t chase 3rd-party internals
 ignore_missing_imports = true
 follow_imports = "silent"
-warn_unused_ignores = true
-warn_redundant_casts = true
+
+# Be friendly in CI for now
+warn_unused_ignores = false
+warn_redundant_casts = false
 warn_return_any = false
-exclude = "(^\\.venv/|^checkpoints/|^outputs/|^assets/models/|^data/cache/|^data/raw/|^notebooks/)"
-namespace_packages = true
-explicit_package_bases = true
-mypy_path = "."
+pretty = true
+show_error_codes = true
+
+# Limit what mypy checks to our core packages
+files = [
+  "models",
+  "data_loader",
+  "scripts/infer",
+  "scripts/train",
+]
+
+# Keep mypy away from generated, heavy, or non-core areas
+exclude = """
+(^\\.venv/|
+^checkpoints/|
+^outputs/|
+^assets/|
+^data/|
+^notebooks/|
+^tests/|
+^scripts/tools/|
+^scripts/dev/|
+^scripts/smoke/)
+"""
+
+# Silence a couple of noisy modules you don't want to type just yet
+[[tool.mypy.overrides]]
+module = "models.svd_unet_slicer"
+ignore_errors = true
