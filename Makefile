@@ -4,7 +4,8 @@
         day7-trainB day7-ablate-nojoint day7-infer day7-smoke \
         final-train-a final-train-a-keepenv final-train-b final-train-b-keepenv \
         ui infer \
-        deps-media fetch-vatex-mini fetch-avsync15-1s fetch-models \
+        deps-media fetch-vatex-mini fetch-models \
+		docs-install docs-autodoc docs-build docs-serve docs-deploy \
         sys-deps
 
 # =========================================================
@@ -40,32 +41,7 @@ ALDM2_VAE_REPO     ?= cvssp/audioldm2
 
 fetch-models:
 	@echo "==> Fetching required model assets into assets/models/ (not tracked in git)"
-	. .venv/bin/activate && python - <<'PY'
-import os, pathlib
-from huggingface_hub import snapshot_download
-
-def fetch(repo_id, allow, dst):
-    dst = pathlib.Path(dst)
-    dst.mkdir(parents=True, exist_ok=True)
-    print(f"[hf] {repo_id} -> {dst}  allow={allow}")
-    snapshot_download(
-        repo_id=repo_id,
-        allow_patterns=allow,
-        local_dir=str(dst),
-        local_dir_use_symlinks=False,
-        token=os.getenv("HF_TOKEN", None),
-    )
-
-# SVD VAE (video)
-fetch(os.getenv("SVD_VAE_REPO","$(SVD_VAE_REPO)"),
-      ["vae/*","*.json"], "assets/models/svd")
-
-# AudioLDM2 VAE (audio)
-fetch(os.getenv("ALDM2_VAE_REPO","$(ALDM2_VAE_REPO)"),
-      ["vae/*","*.json"], "assets/models/audioldm2")
-
-print("[ok] model assets fetched")
-PY
+	. .venv/bin/activate && python scripts/tools/fetch_models.py
 
 # =========================================================
 # Day 1 — Smoke tests
@@ -247,3 +223,24 @@ fetch-avsync15-1s: deps-media
 sys-deps:
 	. .venv/bin/activate && PYTHONPATH=. python scripts/tools/export_system_deps.py
 	bash scripts/tools/install_system_deps.sh
+
+# =========================================================
+# Docs (MkDocs)
+# =========================================================
+DOCS_PORT ?= 8000
+DOCS_HOST ?= 0.0.0.0
+
+docs-install:
+	. .venv/bin/activate && pip install -r requirements-docs.txt
+
+docs-autodoc:
+	. .venv/bin/activate && python tools/autodoc.py
+
+docs-build: docs-autodoc
+	. .venv/bin/activate && mkdocs build
+
+docs-serve: docs-autodoc
+	. .venv/bin/activate && mkdocs serve -a $(DOCS_HOST):$(DOCS_PORT)
+
+docs-deploy: docs-autodoc
+	. .venv/bin/activate && mkdocs gh-deploy --force

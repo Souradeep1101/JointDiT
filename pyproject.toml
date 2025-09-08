@@ -52,3 +52,6 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 warn_return_any = false
 exclude = "(^\\.venv/|^checkpoints/|^outputs/|^assets/models/|^data/cache/|^data/raw/|^notebooks/)"
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = "."

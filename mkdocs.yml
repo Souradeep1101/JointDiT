@@ -1,0 +1,39 @@
+site_name: JointDiT Docs
+site_description: From-scratch implementation and experimentation logs
+nav:
+- Overview: index.md
+- Getting Started: usage.md
+- Architecture: architecture.md
+- Timeline: timeline.md
+- Changelog: changelog.md
+- Notebooks:
+  - 00_bootstrap_on_start: notebooks/00_bootstrap_on_start.ipynb
+  - 00_end_to_end_guide: notebooks/00_end_to_end_guide.ipynb
+  - 01_day1_walkthrough: notebooks/01_day1_walkthrough.ipynb
+  - 02_final_scripts_and_ui: notebooks/02_final_scripts_and_ui.ipynb
+  - 03_day3_unet_slicers_and_weights: notebooks/03_day3_unet_slicers_and_weights.ipynb
+  - 03_text_image_quickstart: notebooks/03_text_image_quickstart.ipynb
+  - day02_data_caching: notebooks/day02_data_caching.ipynb
+  - day04_jointdit: notebooks/day04_jointdit.ipynb
+  - day05_stageA_train: notebooks/day05_stageA_train.ipynb
+  - day06_infer_joint: notebooks/day06_infer_joint.ipynb
+  - day07_finetune_and_infer: notebooks/day07_finetune_and_infer.ipynb
+theme:
+  name: material
+  features:
+  - navigation.instant
+  - navigation.sections
+  - navigation.tracking
+  - content.code.copy
+  - search.highlight
+  - toc.follow
+markdown_extensions:
+- admonition: null
+- attr_list: null
+- footnotes: null
+- toc:
+    permalink: true
+plugins:
+- search: null
+- mkdocs-jupyter:
+    execute: false

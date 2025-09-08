@@ -2,34 +2,33 @@ name: CPU Smoke
 
 on:
   push:
-    branches: [ main ]
   pull_request:
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
     env:
-      TORCH_VERSION: "2.3.1"
-      VISION_VERSION: "0.18.1"
-      AUDIO_VERSION: "2.3.1"
+      PYTHONPATH: ${{ github.workspace }}   # ← imports see repo root
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install minimal runtime deps (CPU wheels)
+      - name: Install minimal deps for tests
         run: |
           python -m pip install --upgrade pip
-          pip install "torch==${TORCH_VERSION}" "torchvision==${VISION_VERSION}" "torchaudio==${AUDIO_VERSION}" --index-url https://download.pytorch.org/whl/cpu
-          # Needed for YAML parsing and optional CLIP import path used by infer script
-          pip install pyyaml open-clip-torch pillow
-          # PyTest
-          pip install pytest
+          # CPU wheels to keep it light; tests only need torch + yaml.
+          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.3.1
+          pip install pyyaml
+          # Optional but harmless (many modules import numpy)
+          pip install numpy
 
       - name: Run quick tests (CPU-only)
         run: |
-          pytest -q
+          pytest -q tests
