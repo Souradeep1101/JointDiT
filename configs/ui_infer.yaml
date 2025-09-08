@@ -1,0 +1,34 @@
+runtime:
+  device: "cuda"
+  dtype: "fp32"
+
+out_dir: "outputs/ui_infer"
+ref_meta: "data/cache/meta/val/avsync15_baby_babbling_crying_5Uodeo_Ln84_000014_000024_6.5_9.5.json"
+
+video_vae_path: "assets/models/svd/vae"
+audio_vae_path: "assets/models/audioldm2/vae"
+
+ckpt: "checkpoints/day05_stage_a_finalA/ckpt_step_000025.pt"
+
+mp4_fps: 12
+audio_sr: 16000
+steps: 30
+seeds: [0]
+
+# NEW: CLIP conditioning defaults (safe)
+clip:
+  enabled: true
+  model: ViT-B-16
+  pretrained: openai
+  use_image_firstframe: true
+
+# Prompt used when CLIP.enabled=true (UI will overwrite)
+prompt: ""
+
+guidance:
+  type: "jointcfg"
+  weight_v: 1.5
+  weight_a: 1.5
+  weight_txt: 1.5   # NEW
+  weight_img: 1.5   # NEW
+  weight_neg_txt: 0.0         # <-- NEW: push away from negative prompt

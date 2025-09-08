@@ -1,0 +1,18 @@
+runtime:
+  device: cuda
+  dtype: fp16   # fp32 if you hit issues
+
+svd:
+  # Either an HF repo root (uses subfolder="unet")...
+  unet_path: stabilityai/stable-video-diffusion-img2vid-xt
+  # ...or a local mirror folder containing the UNet weights:
+  # unet_path: /workspace/jointdit/assets/models/svd/unet
+
+audio:
+  # Either HF id (uses subfolder="unet")...
+  # unet_path: cvssp/audioldm2
+  # ...or local mirror folder:
+  unet_path: /workspace/jointdit/assets/models/audioldm2/unet
+
+# Optional: read a cached sample to take real shapes from day-2 cache
+cache_meta_glob: /workspace/jointdit/data/cache/meta/train/*.json

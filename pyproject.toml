@@ -1,0 +1,54 @@
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+exclude = '''
+/(
+  \.git
+| \.venv
+| build
+| dist
+| checkpoints
+| outputs
+| assets/models
+| data/cache
+| data/raw
+| notebooks
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+  ".git",
+  ".venv",
+  "build",
+  "dist",
+  "checkpoints",
+  "outputs",
+  "assets/models",
+  "data/cache",
+  "data/raw",
+  "notebooks",
+]
+
+[tool.ruff.lint]
+# Base error/warn set + import sorting
+select = ["E", "F", "W", "I"]
+# Let Black handle line length
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Allow late imports in a few pragmatic spots
+"models/svd_unet_slicer.py" = ["E402"]
+"scripts/aldm2/scan_cross_dim.py" = ["E402"]
+"scripts/dev/check_env.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = false
+exclude = "(^\\.venv/|^checkpoints/|^outputs/|^assets/models/|^data/cache/|^data/raw/|^notebooks/)"

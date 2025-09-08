@@ -1,0 +1,58 @@
+runtime:
+  device: "cuda"
+  dtype: "fp16"
+  seed: 123
+
+data:
+  cache_dir: "/workspace/jointdit/data/cache"
+  train_split: "train"
+
+loader:
+  batch_size: 1
+  num_workers: 2
+  pin_memory: true
+
+model:
+  d_model: 256
+  heads: 8
+  n_blocks: 6
+  ff_mult: 4
+  attn_dropout: 0.0
+  ff_dropout: 0.0
+  rope_video: true
+  rope_audio: true
+
+stageB:
+  unfreeze_blocks: [2, 3]
+  unfreeze_io: true
+  lr_expert: 1.0e-5
+  lr_io: 2.0e-5
+
+ablation:
+  disable_joint: true   # <— key difference
+
+optim:
+  amp: true
+  grad_accum: 1
+  lr_main: 1.0e-5
+  betas: [0.9, 0.999]
+  weight_decay: 0.01
+  log_every: 10
+  ckpt_every: 200
+  max_steps: 1000
+
+schedule:
+  edm_P_mean: 0.0
+  edm_P_std: 1.0
+  sigma_video_min: 1.0e-3
+  sigma_video_max: 1.0
+  sigma_audio_min: 1.0e-3
+  sigma_audio_max: 1.0
+
+loss:
+  lambda_v: 1.0
+  lambda_a: 1.0
+
+out:
+  ckpt_dir: "/workspace/jointdit/checkpoints/day07_ablate_nojoint"
+  log_dir:  "/workspace/jointdit/runs/day07_ablate_nojoint"

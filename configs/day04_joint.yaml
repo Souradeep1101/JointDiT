@@ -1,0 +1,21 @@
+runtime:
+  device: cuda
+  dtype: fp16
+
+model:
+  d_model: 256
+  heads: 8
+  ff_mult: 2
+  dropout: 0.0
+  joint_blocks: 2
+  rope:
+    video:
+      enable: true
+    audio:
+      enable: true
+
+data:
+  cache_root: /workspace/jointdit/data/cache
+  split: train
+
+modes_for_smoke: ["full", "iso_v", "iso_a"]

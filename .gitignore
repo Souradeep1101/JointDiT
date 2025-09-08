@@ -1,0 +1,20 @@
+# python / env
+__pycache__/
+*.pyc
+.venv/
+
+# data & outputs
+data/raw/
+data/cache/
+data/downloads/
+outputs/
+checkpoints/
+
+# OS/editor
+.DS_Store
+.vscode/
+
+# --- Model weights, caches, and artifacts ---
+assets/models/**
+!assets/models/.gitkeep
+!assets/models/README.md

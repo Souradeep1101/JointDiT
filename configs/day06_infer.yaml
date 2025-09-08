@@ -1,0 +1,26 @@
+runtime:
+  device: "cuda"
+  dtype: "fp16"           # fp32 if you hit issues
+
+# Use the latest Stage-A smoke ckpt (adjust if yours is different)
+ckpt: "/workspace/jointdit/checkpoints/day05_stage_a_smoke/ckpt_step_000025.pt"
+
+# VAE paths (same as Day 2)
+video_vae_path: "/workspace/jointdit/assets/models/svd/vae"
+audio_vae_path: "/workspace/jointdit/assets/models/audioldm2/vae"
+
+# Reference meta drives shapes/fps/mel params for decoding
+ref_meta: "/workspace/jointdit/data/cache/meta/val/clip_val_0001.json"
+
+# Sampler
+steps: 30          # keep small; tweak later
+seeds: [0, 1]      # generate a couple clips
+guidance:
+  type: "jointcfg_star"   # "none" | "jointcfg" | "jointcfg_star"
+  weight_v: 1.5           # guidance gain for video
+  weight_a: 1.5           # guidance gain for audio
+
+# Output
+out_dir: "/workspace/jointdit/outputs/day06"
+mp4_fps: 12              # write FPS (will default to meta fps if omitted)
+audio_sr: 16000          # waveform sample rate (matches Day 2)

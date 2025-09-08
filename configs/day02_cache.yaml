@@ -1,0 +1,49 @@
+project_root: /workspace/jointdit
+
+raw:
+  dir: /workspace/jointdit/data/raw
+  exts: [".mp4", ".mov", ".mkv", ".webm"]
+
+cache:
+  dir: /workspace/jointdit/data/cache
+
+video:
+  vae_path: /workspace/jointdit/assets/models/svd/vae
+  resize_policy: short_side
+  target_short_side: 320
+  max_frames: 12
+  target_fps: 12
+  frame_batch: 4
+
+audio:
+  vae_path: /workspace/jointdit/assets/models/audioldm2/vae
+  sample_rate: 16000
+  n_mels: 80
+  hop_length: 256
+  win_length: 1024
+  fmin: 0
+  fmax: 8000
+  max_seconds: 10
+
+# --- enable CLIP for image+text ---
+clip:
+  enabled: true
+  model_path: openai          # or a local folder/checkpoint
+  variant: ViT-L-14
+  image:
+    save_image_emb: true
+  text:
+    use_meta_key: captions     # we’ll prefer meta['captions'] if present
+    join_with: ", "
+    # Optional mapping from class folder -> nicer phrase
+    classname_map:
+      baby_babbling_crying: "a baby babbling and crying"
+      dog_barking: "a dog is barking"
+    save_tokens: true
+    save_text_emb: true        # set false if you only want tokens
+
+runtime:
+  device: cuda
+  dtype: fp16
+  num_workers: 4
+  limit: -1
