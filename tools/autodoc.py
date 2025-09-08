@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -51,25 +52,54 @@ def copy_notebooks(nbs):
         shutil.copy2(nb, dst)
 
 
+def _fix_markdown_source(cell):
+    src = cell.get("source", "")
+    if isinstance(src, str):
+        if "\\n" in src and "\n" not in src:
+            cell["source"] = src.replace("\\n", "\n")
+    elif isinstance(src, list):
+        changed = False
+        new = []
+        for s in src:
+            if isinstance(s, str) and "\\n" in s and "\n" not in s:
+                s = s.replace("\\n", "\n")
+                changed = True
+            new.append(s)
+        if changed:
+            cell["source"] = new
+
+
 def sanitize_docs_notebooks():
-    changed = False
+    changed_any = False
     for p in sorted(NB_DST.glob("*.ipynb")):
         nb = nbf.read(p, as_version=4)
-        c = False
+        changed = False
         for cell in nb.cells:
-            md = cell.get("metadata", {})
-            if isinstance(md, dict) and "execution" in md:
+            # add id (future nbformat requirement)
+            if not cell.get("id"):
+                cell["id"] = uuid.uuid4().hex
+                changed = True
+            # drop invalid execution metadata; normalize tags
+            md = cell.get("metadata", {}) or {}
+            if "execution" in md:
                 md.pop("execution", None)
-                c = True
+                changed = True
             if isinstance(md.get("tags"), list):
                 md["tags"] = [str(t) for t in md["tags"]]
             cell["metadata"] = md
+            # prettify markdown sources with literal \n
+            if cell.get("cell_type") == "markdown":
+                before = cell.get("source", "")
+                _fix_markdown_source(cell)
+                if cell.get("source", "") != before:
+                    changed = True
         nb["nbformat"] = 4
         nb["nbformat_minor"] = max(nb.get("nbformat_minor", 5), 5)
-        if c:
+        if changed:
             nbf.write(nb, p)
-            changed = True
-    return changed
+            print(f"[fixed] {p}")
+            changed_any = True
+    return changed_any
 
 
 def detect_pkg():
@@ -171,9 +201,8 @@ def main():
     write_architecture()
     write_timeline(nbs)
     write_changelog()
-    pkg = detect_pkg()
     if API_MD.exists():
-        write_api_md(pkg)
+        write_api_md(detect_pkg())
 
 
 if __name__ == "__main__":

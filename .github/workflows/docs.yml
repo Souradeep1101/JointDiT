@@ -26,6 +26,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-docs.txt
       - name: Generate docs
+        env:
+          JUPYTER_PLATFORM_DIRS: "1"
         run: |
           python tools/autodoc.py
           mkdocs build --site-dir site

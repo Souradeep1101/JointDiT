@@ -22,7 +22,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           # tiny deps only; keep this fast
-          pip install -q pytest pyyaml
+          pip install -q pytest pyyaml numpy pillow
           # CPU-only torch wheel for tests
           pip install -q --index-url https://download.pytorch.org/whl/cpu torch==2.3.*
 
