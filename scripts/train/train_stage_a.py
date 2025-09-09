@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# scripts/train/train_stage_a.py
 import argparse
 import os
 import sys
@@ -26,7 +28,7 @@ from models.noise_schedules import (
 
 
 # ---------------- utils ----------------
-def load_cfg(p):
+def load_cfg(p: str):
     return yaml.safe_load(Path(p).read_text())
 
 
@@ -54,13 +56,13 @@ def _get_any(d: dict, names):
     return None
 
 
-def _rope_from_cfg(mcfg):
+def _rope_from_cfg(mcfg: dict):
     rv = bool(mcfg.get("rope_video", mcfg.get("rope", True)))
     ra = bool(mcfg.get("rope_audio", mcfg.get("rope", True)))
     return {"video": {"enable": rv}, "audio": {"enable": ra}}
 
 
-def build_model(cfg, device):
+def build_model(cfg: dict, device: torch.device) -> JointDiT:
     mcfg = cfg["model"]
     d_model = int(mcfg["d_model"])
     heads = int(mcfg.get("heads", mcfg.get("n_heads", 8)))
@@ -84,7 +86,7 @@ def build_model(cfg, device):
     return model
 
 
-def _extract_meta_list(batch):
+def _extract_meta_list(batch: dict):
     # best-effort to recover per-sample dicts
     if "meta_list" in batch and isinstance(batch["meta_list"], (list, tuple)):
         return list(batch["meta_list"])
@@ -123,7 +125,7 @@ def main():
     args = ap.parse_args()
 
     cfg = load_cfg(args.cfg)
-    device = cfg["runtime"]["device"]
+    device = torch.device(cfg["runtime"]["device"])
     set_seed(int(cfg["runtime"]["seed"]))
 
     # dirs
@@ -218,7 +220,7 @@ def main():
             raise KeyError(f"Missing latents; keys={list(batch.keys())}")
 
         if v0.dim() == 4:
-            v0 = v0.unsqueeze(0)
+            v0 = v0.unsqueeze(0)  # (1,T,C,H,W)
         if a0.dim() == 5 and a0.shape[1] == 1:
             a0 = a0[:, 0]
         if a0.dim() == 4 and v0.shape[0] > 1 and a0.shape[0] == 1:
@@ -303,7 +305,7 @@ def main():
                 "scaler": scaler.state_dict() if amp_enabled else {},
                 "cfg": cfg,
             }
-            outp = ckpt_dir / f"ckpt_step_{step:06d}.pt"
+            outp = ckpt_dir | Path(f"ckpt_step_{step:06d}.pt")
             torch.save(ck, outp)
             print(f"[ckpt] {outp}")
 

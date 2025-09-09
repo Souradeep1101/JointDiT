@@ -1,3 +1,6 @@
+# models/joint/joint_block.py
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
 
@@ -5,17 +8,17 @@ from .perceiver_joint_attn import PerceiverJointAttention
 
 
 class GEGLU(nn.Module):
-    def __init__(self, dim_in, dim_out):
+    def __init__(self, dim_in: int, dim_out: int):
         super().__init__()
         self.proj = nn.Linear(dim_in, dim_out * 2)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x, gate = self.proj(x).chunk(2, dim=-1)
         return x * torch.nn.functional.gelu(gate)
 
 
 class FeedForward(nn.Module):
-    def __init__(self, dim, mult=2):
+    def __init__(self, dim: int, mult: float = 2):
         super().__init__()
         hidden = int(dim * mult)
         self.net = nn.Sequential(
@@ -23,7 +26,7 @@ class FeedForward(nn.Module):
             nn.Linear(hidden, dim),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
 
 
@@ -32,7 +35,14 @@ class JointBlock(nn.Module):
     Tokens in d_model, per-modality LN, joint attention, per-modality FFN.
     """
 
-    def __init__(self, d_model=256, heads=8, ff_mult=2, dropout=0.0, rope_cfg=None):
+    def __init__(
+        self,
+        d_model: int = 256,
+        heads: int = 8,
+        ff_mult: float = 2,
+        dropout: float = 0.0,
+        rope_cfg=None,
+    ):
         super().__init__()
         self.ln_v1 = nn.LayerNorm(d_model)
         self.ln_a1 = nn.LayerNorm(d_model)
@@ -46,13 +56,13 @@ class JointBlock(nn.Module):
 
     def forward(
         self,
-        v_tokens,
-        a_tokens,
-        v_shape=None,
-        a_shape=None,
-        mode="full",
-        extra_ctx: torch.Tensor | None = None,
-    ):
+        v_tokens: torch.Tensor,
+        a_tokens: torch.Tensor,
+        v_shape: Optional[dict] = None,
+        a_shape: Optional[dict] = None,
+        mode: str = "full",
+        extra_ctx: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         # attn + residual
         v_h, a_h = self.attn(
             self.ln_v1(v_tokens),

@@ -1,4 +1,6 @@
+# models/joint/perceiver_joint_attn.py
 import os
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -9,6 +11,7 @@ from .rope import apply_rope_1d
 try:
     from torch.backends.cuda import sdp_kernel
 
+    # prefer flash / mem-efficient when available
     sdp_kernel(enable_math=False, enable_flash=True, enable_mem_efficient=True)
 except Exception:
     pass
@@ -26,10 +29,15 @@ class PerceiverJointAttention(nn.Module):
     """
     Per-modality Q/K/V & out-projections, shared heads & head_dim.
     SDPA-backed with optional query chunking and K/V downsampling.
-    Now supports optional `extra_ctx` tokens (e.g., CLIP) appended to K/V bank.
+    Supports optional `extra_ctx` tokens (e.g., CLIP) appended to K/V bank.
+
+    `mode`:
+      - "full":     cross-modal (V attends to V+A[+ctx], A attends to V+A[+ctx])
+      - "iso_v":    video-only attention (A path is passthrough)
+      - "iso_a":    audio-only attention (V path is passthrough)
     """
 
-    def __init__(self, d_model=256, heads=8, dropout=0.0, rope_cfg=None):
+    def __init__(self, d_model: int = 256, heads: int = 8, dropout: float = 0.0, rope_cfg=None):
         super().__init__()
         self.d_model = d_model
         self.heads = heads
@@ -61,21 +69,23 @@ class PerceiverJointAttention(nn.Module):
         self.drop = nn.Dropout(dropout)
 
     # shape helpers
-    def _reshape_heads(self, x):
+    def _reshape_heads(self, x: torch.Tensor) -> torch.Tensor:
         B, L, D = x.shape
         H, Dh = self.heads, self.head_dim
         return x.view(B, L, H, Dh).transpose(1, 2).contiguous()
 
-    def _merge_heads(self, x):
+    def _merge_heads(self, x: torch.Tensor) -> torch.Tensor:
         B, H, L, Dh = x.shape
         return x.transpose(1, 2).contiguous().view(B, L, H * Dh)
 
-    def _sdpa_chunked(self, q, k, v, chunk):
+    def _sdpa_chunked(
+        self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, chunk: int
+    ) -> torch.Tensor:
         B, H, Lq, Dh = q.shape
         _, _, Lk, _ = k.shape
-        q_ = q.permute(0, 1, 2, 3).reshape(B * H, Lq, Dh)
-        k_ = k.permute(0, 1, 2, 3).reshape(B * H, Lk, Dh)
-        v_ = v.permute(0, 1, 2, 3).reshape(B * H, Lk, Dh)
+        q_ = q.reshape(B * H, Lq, Dh)
+        k_ = k.reshape(B * H, Lk, Dh)
+        v_ = v.reshape(B * H, Lk, Dh)
 
         if chunk and chunk > 0 and Lq > chunk:
             outs = []
@@ -89,7 +99,7 @@ class PerceiverJointAttention(nn.Module):
 
         return out_.reshape(B, H, out_.shape[1], Dh)
 
-    def _downsample_seq(self, x, factor: int):
+    def _downsample_seq(self, x: torch.Tensor, factor: int) -> torch.Tensor:
         if factor <= 1:
             return x
         B, H, L, Dh = x.shape
@@ -105,21 +115,17 @@ class PerceiverJointAttention(nn.Module):
 
     def forward(
         self,
-        v_tokens,
-        a_tokens,
-        v_shape=None,
-        a_shape=None,
-        mode="full",
-        extra_ctx: torch.Tensor | None = None,
-    ):
+        v_tokens: torch.Tensor,
+        a_tokens: torch.Tensor,
+        v_shape: Optional[dict] = None,
+        a_shape: Optional[dict] = None,
+        mode: str = "full",
+        extra_ctx: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         v_tokens: (B, Lv, D)   a_tokens: (B, La, D)
         extra_ctx: (B, Lc, D) optional (e.g., CLIP text/image tokens)
-        mode: "full" | "iso_v" | "iso_a"
         """
-        B, Lv, _ = v_tokens.shape
-        _, La, _ = a_tokens.shape
-
         # Q/K/V per modality
         qv = self._reshape_heads(self.qv(v_tokens))
         kv = self._reshape_heads(self.kv(v_tokens))
@@ -135,7 +141,7 @@ class PerceiverJointAttention(nn.Module):
         if self.rope_a:
             qa, ka = apply_rope_1d(qa, ka)
 
-        # Context bank
+        # K/V context bank according to mode
         if mode == "iso_v":
             K_cat, V_cat = kv, vv
         elif mode == "iso_a":
@@ -151,7 +157,7 @@ class PerceiverJointAttention(nn.Module):
             K_cat = torch.cat([K_cat, kc], dim=2)
             V_cat = torch.cat([V_cat, vc], dim=2)
 
-        # Optional downsample
+        # Optional downsample for memory
         if self.kv_downsample > 1:
             K_cat = self._downsample_seq(K_cat, self.kv_downsample)
             V_cat = self._downsample_seq(V_cat, self.kv_downsample)

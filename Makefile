@@ -2,7 +2,7 @@
         cache-train cache-val smoke-day02 \
         smoke-day03 smoke-day04 smoke-day05 smoke-day06 \
         day7-trainB day7-ablate-nojoint day7-infer day7-smoke \
-        final-train-a final-train-a-keepenv final-train-b final-train-b-keepenv \
+        final-train-a final-train-a-keepenv final-train-b final-train-b-keepenv final-train-b-safe\
         ui infer \
         deps-media fetch-vatex-mini fetch-models \
 		docs-install docs-autodoc docs-build docs-serve docs-deploy \
@@ -160,6 +160,19 @@ final-train-b:
 final-train-b-keepenv:
 	. .venv/bin/activate && \
 	FORCE_KEEP_USER_ENVS=1 PYTHONPATH=. scripts/finals/train.sh \
+	  --stage B --cfg configs/day07_trainB.yaml --max-steps 1000 \
+	  --ckpt-suffix finalB --log-suffix finalB
+
+# A memory-safe Stage-B run that preserves these envs (KEEP=1)
+final-train-b-safe:
+	. .venv/bin/activate && \
+	FORCE_KEEP_USER_ENVS=1 \
+	JOINTDIT_MAX_T=$(SAFE_MAX_T) \
+	JOINTDIT_Q_CHUNK_V=$(SAFE_Q_CHUNK_V) \
+	JOINTDIT_Q_CHUNK_A=$(SAFE_Q_CHUNK_A) \
+	JOINTDIT_KV_DOWNSAMPLE=$(SAFE_KV_DOWNSAMPLE) \
+	PYTORCH_CUDA_ALLOC_CONF="$(SAFE_ALLOC_CONF)" \
+	PYTHONPATH=. scripts/finals/train.sh \
 	  --stage B --cfg configs/day07_trainB.yaml --max-steps 1000 \
 	  --ckpt-suffix finalB --log-suffix finalB
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# scripts/train/train_stage_b.py
 import argparse
 import os
 import sys
@@ -24,7 +25,7 @@ from models.noise_schedules import (
 )
 
 
-def load_cfg(p):
+def load_cfg(p: str):
     return yaml.safe_load(Path(p).read_text())
 
 
@@ -79,7 +80,7 @@ def build_model(cfg, device):
     return model
 
 
-def freeze_all_unfreeze_experts(model, blocks=(2, 3), unfreeze_io=True):
+def freeze_all_unfreeze_experts(model: JointDiT, blocks=(2, 3), unfreeze_io=True):
     for p in model.parameters():
         p.requires_grad = False
     if hasattr(model, "blocks"):
@@ -94,7 +95,7 @@ def freeze_all_unfreeze_experts(model, blocks=(2, 3), unfreeze_io=True):
                     p.requires_grad = True
 
 
-def group_params_for_stageB(model, lr_expert, lr_io, lr_fallback):
+def group_params_for_stageB(model: JointDiT, lr_expert, lr_io, lr_fallback):
     groups, expert, io, other = [], [], [], []
     for n, p in model.named_parameters():
         if not p.requires_grad:
@@ -151,7 +152,7 @@ def main():
     args = ap.parse_args()
 
     cfg = load_cfg(args.cfg)
-    device = cfg["runtime"]["device"]
+    device = torch.device(cfg["runtime"]["device"])
     set_seed(int(cfg["runtime"]["seed"]))
 
     out_cfg = cfg["out"]

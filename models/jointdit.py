@@ -1,3 +1,6 @@
+# models/jointdit.py
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
 
@@ -11,14 +14,14 @@ class JointDiT(nn.Module):
 
     def __init__(
         self,
-        d_model=256,
-        heads=8,
-        ff_mult=2,
-        dropout=0.0,
+        d_model: int = 256,
+        heads: int = 8,
+        ff_mult: float = 2,
+        dropout: float = 0.0,
         rope_cfg=None,
-        video_in_ch=4,
-        audio_in_ch=8,
-        joint_blocks=2,
+        video_in_ch: int = 4,
+        audio_in_ch: int = 8,
+        joint_blocks: int = 2,
         svd_slicer=None,
         aldm_slicer=None,
         **kwargs,
@@ -52,14 +55,16 @@ class JointDiT(nn.Module):
         )
 
     @staticmethod
-    def _vid_flatten(x):  # (B,T,C,H,W) -> (B, L=THW, C)
+    def _vid_flatten(x: torch.Tensor):  # (B,T,C,H,W) -> (B, L=THW, C)
         B, T, C, H, W = x.shape
         meta = {"T": T, "H": H, "W": W}
         x = x.permute(0, 2, 1, 3, 4).contiguous().view(B, C, T * H * W).transpose(1, 2).contiguous()
         return x, meta
 
     @staticmethod
-    def _vid_unflatten(tokens, meta, C):  # (B, L, C) -> (B,T,C,H,W)
+    def _vid_unflatten(
+        tokens: torch.Tensor, meta: dict, C: int
+    ) -> torch.Tensor:  # (B, L, C) -> (B,T,C,H,W)
         B, L, _ = tokens.shape
         T, H, W = meta["T"], meta["H"], meta["W"]
         assert L == T * H * W, "video token length mismatch"
@@ -73,32 +78,28 @@ class JointDiT(nn.Module):
         return x
 
     @staticmethod
-    def _aud_flatten(x):  # (B,C,H,W) -> (B, L=HW, C)
+    def _aud_flatten(x: torch.Tensor):  # (B,C,H,W) -> (B, L=HW, C)
         B, C, H, W = x.shape
         meta = {"H": H, "W": W}
         x = x.view(B, C, H * W).transpose(1, 2).contiguous()
         return x, meta
 
     @staticmethod
-    def _aud_unflatten(tokens, meta, C):  # (B, L, C) -> (B,C,H,W)
+    def _aud_unflatten(
+        tokens: torch.Tensor, meta: dict, C: int
+    ) -> torch.Tensor:  # (B, L, C) -> (B,C,H,W)
         B, L, _ = tokens.shape
         H, W = meta["H"], meta["W"]
         assert L == H * W, "audio token length mismatch"
         x = tokens.transpose(1, 2).contiguous().view(B, C, H, W)
         return x
 
-    def _maybe_call(self, slicer, name, x):
+    def _maybe_call(self, slicer, name: str, x: torch.Tensor) -> torch.Tensor:
         if slicer is None:
             return x
         mod = getattr(slicer, name, None)
         if mod is not None and callable(mod):
-            try:
-                return mod(x)
-            except TypeError:
-                try:
-                    return mod(x)
-                except Exception:
-                    pass
+            return mod(x)
         meth = getattr(slicer, f"run_{name}", None)
         if callable(meth):
             return meth(x)
@@ -106,15 +107,15 @@ class JointDiT(nn.Module):
 
     def forward(
         self,
-        v_latents,
-        a_latents,
-        mode="full",
-        t_ctx: torch.Tensor | None = None,
-        i_ctx: torch.Tensor | None = None,
-    ):
+        v_latents: torch.Tensor,
+        a_latents: torch.Tensor,
+        mode: str = "full",
+        t_ctx: Optional[torch.Tensor] = None,
+        i_ctx: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         v_latents: (B,T,Cv,H,W)   a_latents: (B,Ca,H,W)
-        t_ctx / i_ctx: optional CLIP tokens (B,1,d_model)
+        t_ctx / i_ctx: optional CLIP tokens (B, Lctx, d_model)
         """
         Bv, Tv, Cv, Hv, Wv = v_latents.shape
         Ba, Ca, Ha, Wa = a_latents.shape

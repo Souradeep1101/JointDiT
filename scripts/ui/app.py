@@ -140,6 +140,7 @@ def _prepare_temp_cfg(
     # Either meta path or manual override
     if _none_if_blank(ref_meta_path):
         base["ref_meta"] = ref_meta_path
+        base.pop("manual_shapes", None)
     else:
         base.pop("ref_meta", None)
         base["manual_shapes"] = {
@@ -148,7 +149,6 @@ def _prepare_temp_cfg(
             "audio": {"c": int(man_ac), "h": int(man_ah), "w": int(man_aw)},
             "fps": int(man_fps),
             "sr": int(man_sr),
-            # advanced mel params are optional; infer defaults in infer script
         }
 
     # Guidance
@@ -167,7 +167,6 @@ def _prepare_temp_cfg(
     clip["use_image_firstframe"] = bool(use_meta_image)
     if image_path:
         clip["image_path"] = image_path  # overrides meta first-frame
-    # Keep your defaults if present; user can still set variant/pretrained in YAML
 
     tmp = Path(tempfile.mkdtemp(prefix="jointdit_ui_"))
     tmp_yaml = tmp / "ui_run.yaml"
@@ -192,12 +191,6 @@ def _run_infer(tmp_yaml: Path) -> Tuple[Optional[str], Optional[str], str]:
     log_text = "\n".join(logs)
     if rc != 0:
         return None, None, f"[infer] exit code {rc}\n{log_text}"
-
-    # y = yaml.safe_load(Path(tmp_yaml).read_text())
-    # out_dir = Path(y["out_dir"])
-    # mp4 = next(sorted(out_dir.glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True), None)
-    # wav  = next(sorted(out_dir.glob("*.wav"), key=lambda p: p.stat().st_mtime, reverse=True), None)
-    # return (str(mp4) if mp4 else None), (str(wav) if wav else None), log_text
 
     y = yaml.safe_load(Path(tmp_yaml).read_text())
     out_dir = Path(y["out_dir"])

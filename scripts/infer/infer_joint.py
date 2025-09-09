@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 import torch
 import yaml
@@ -43,15 +44,15 @@ except Exception:
 
 
 # -------------------- Helpers --------------------
-def load_yaml(p):
+def load_yaml(p: str):
     return yaml.safe_load(Path(p).read_text())
 
 
-def load_meta(p):
+def load_meta(p: str):
     return json.loads(Path(p).read_text())
 
 
-def prepare_shapes_from_meta(meta):
+def prepare_shapes_from_meta(meta: dict):
     """
     Returns:
       (T, vc, vh, vw), (ac, ah, aw), fps, audio_cfg, v_scale, a_scale
@@ -78,7 +79,7 @@ def prepare_shapes_from_meta(meta):
     return (T, vc, vh, vw), (ac, ah, aw), fps, audio_cfg, v_scale, a_scale
 
 
-def load_video_vae(path, device):
+def load_video_vae(path: str, device: torch.device):
     if not HAVE_DIFFUSERS:
         raise RuntimeError("diffusers not installed")
     last_err = None
@@ -99,7 +100,9 @@ def load_video_vae(path, device):
     return v_vae.to(device).eval()
 
 
-def load_audio_vae(path, device):
+def load_audio_vae(path: str, device: torch.device):
+    if not HAVE_DIFFUSERS:
+        raise RuntimeError("diffusers not installed")
     a_vae = AutoencoderKL.from_pretrained(path).to(device)
     a_vae.eval()
     return a_vae
@@ -107,17 +110,17 @@ def load_audio_vae(path, device):
 
 @torch.no_grad()
 def joint_guided_pred(
-    model,
-    v_t,
-    a_t,
-    w_v=1.0,
-    w_a=1.0,
-    w_txt=0.0,
-    w_neg_txt=0.0,
-    w_img=0.0,
-    t_pos=None,
-    t_neg=None,
-    i_pos=None,
+    model: JointDiT,
+    v_t: torch.Tensor,
+    a_t: torch.Tensor,
+    w_v: float = 1.0,
+    w_a: float = 1.0,
+    w_txt: float = 0.0,
+    w_neg_txt: float = 0.0,
+    w_img: float = 0.0,
+    t_pos: Optional[torch.Tensor] = None,
+    t_neg: Optional[torch.Tensor] = None,
+    i_pos: Optional[torch.Tensor] = None,
 ):
     """
     Guidance terms:
@@ -125,11 +128,13 @@ def joint_guided_pred(
       - text positive: pos vs no-text
       - text negative: pos vs neg-text
       - image positive: pos vs no-image
+
+    Implements the "JointCFG" style by comparing full vs isolated paths.
     """
     # positive contexts
     v_pos, a_pos = model(v_t, a_t, mode="full", t_ctx=t_pos, i_ctx=i_pos)
 
-    # iso baselines
+    # iso baselines (no cross)
     v_iso, _ = model(v_t, a_t, mode="iso_v", t_ctx=t_pos, i_ctx=i_pos)
     _, a_iso = model(v_t, a_t, mode="iso_a", t_ctx=t_pos, i_ctx=i_pos)
 
@@ -169,40 +174,125 @@ def joint_guided_pred(
 
 
 @torch.no_grad()
-def x0_to_next_xt(x_t, x0_hat, sigma_t, sigma_next):
+def x0_to_next_xt(
+    x_t: torch.Tensor, x0_hat: torch.Tensor, sigma_t: torch.Tensor, sigma_next: torch.Tensor
+):
     eps_hat = (x_t - x0_hat) / (sigma_t.clamp(min=1e-8))
     return x0_hat + sigma_next * eps_hat
 
 
+# @torch.no_grad()
+# def decode_video_latents(v_vae, v_latents: torch.Tensor, scaling: float) -> torch.Tensor:
+#     """
+#     v_latents: (T, C, H, W)
+#     Returns frames: (T, 3, H', W')
+#     """
+#     device = next(v_vae.parameters()).device
+#     weight_dtype = next(v_vae.parameters()).dtype
+#     T = v_latents.shape[0]
+
+
+#     if AutoencoderKLTemporalDecoder is not None and isinstance(v_vae, AutoencoderKLTemporalDecoder):
+#         # decode as a single temporal chunk for speed/consistency
+#         z = (v_latents.unsqueeze(0) / scaling).to(device=device, dtype=weight_dtype)  # (1,T,C,H,W)
+#         x = v_vae.decode(z).sample  # expects (B,T,C,H,W)
+#         x = (x.clamp(-1, 1) + 1) * 0.5  # (1,T,3,H',W')
+#         frames = x[0].detach().cpu()
+#     else:
+#         # per-frame (plain AutoencoderKL)
+#         frames = []
+#         for i in range(T):
+#             zi = (v_latents[i : i + 1] / scaling).to(device=device, dtype=weight_dtype)  # (1,C,H,W)
+#             x = v_vae.decode(zi).sample  # (1,3,H',W')
+#             x = (x.clamp(-1, 1) + 1) * 0.5
+#             frames.append(x[0].detach().cpu())
+#         frames = torch.stack(frames, 0)
+#     return frames
 @torch.no_grad()
 def decode_video_latents(v_vae, v_latents, scaling):
+    """
+    Decode video latents to float tensor in [0,1].
+    - Works with AutoencoderKLTemporalDecoder (SVD) and plain AutoencoderKL.
+    - Accepts (T,C,H,W) or (B,T,C,H,W) with B==1.
+    - Optional env: JOINTDIT_VID_DECODE_CHUNK (default: 8).
+    Returns: (T, 3, H, W)
+    """
     device = next(v_vae.parameters()).device
     weight_dtype = next(v_vae.parameters()).dtype
+
+    # Normalize to (T,C,H,W)
+    if v_latents.dim() == 5:  # (B,T,C,H,W)
+        assert v_latents.size(0) == 1, "Batch>1 not supported here"
+        v_latents = v_latents[0]
+    assert v_latents.dim() == 4, f"expected (T,C,H,W), got {tuple(v_latents.shape)}"
+
+    T, C, H, W = v_latents.shape
+    z = (v_latents / scaling).to(device=device, dtype=weight_dtype, non_blocking=True)
+
+    # Chunk size to cap VRAM
+    try:
+        chunk = max(1, int(os.getenv("JOINTDIT_VID_DECODE_CHUNK", "8")))
+    except Exception:
+        chunk = 8
+
     frames = []
-    for i in range(v_latents.shape[0]):
-        zi = (v_latents[i : i + 1] / scaling).to(device=device, dtype=weight_dtype)
-        if AutoencoderKLTemporalDecoder is not None and isinstance(
-            v_vae, AutoencoderKLTemporalDecoder
-        ):
-            x = v_vae.decode(zi, num_frames=1).sample
+
+    # Temporal path
+    if isinstance(v_vae, AutoencoderKLTemporalDecoder):
+        if chunk >= T:  # all at once
+            z_btchw = z.reshape(T, C, H, W)  # (T,C,H,W)
+            x = v_vae.decode(z_btchw, num_frames=T).sample  # (1,3,T,H,W)
+            if x.dim() == 4:  # rare: T==1 → (1,3,H,W)
+                x = x.unsqueeze(2)  # (1,3,1,H,W)
+            x = (x.clamp(-1, 1) + 1) * 0.5
+            frames = x[0].permute(1, 0, 2, 3).contiguous().cpu()  # (T,3,H,W)
         else:
-            x = v_vae.decode(zi).sample
-        x = (x.clamp(-1, 1) + 1) * 0.5
-        frames.append(x[0].detach().cpu())
-    return torch.stack(frames, 0)
+            for s in range(0, T, chunk):
+                e = min(T, s + chunk)
+                z_chunk = z[s:e].reshape(e - s, C, H, W)  # (chunk,C,H,W)
+                x = v_vae.decode(z_chunk, num_frames=(e - s)).sample
+                # If num_frames==1, diffusers returns (1,3,H,W); otherwise (1,3,chunk,H,W)
+                if x.dim() == 4:  # (1,3,H,W)
+                    x = x.unsqueeze(2)  # (1,3,1,H,W)
+                x = (x.clamp(-1, 1) + 1) * 0.5
+                frames.append(x[0].permute(1, 0, 2, 3).contiguous().cpu())  # (chunk,3,H,W)
+            frames = torch.cat(frames, dim=0)
+
+    # Plain image VAE path
+    else:
+        if chunk >= T:
+            x = v_vae.decode(z).sample  # (T,3,H,W)
+            x = (x.clamp(-1, 1) + 1) * 0.5
+            frames = x.contiguous().cpu()
+        else:
+            for s in range(0, T, chunk):
+                e = min(T, s + chunk)
+                z_chunk = z[s:e]  # (chunk,C,H,W)
+                x = v_vae.decode(z_chunk).sample  # (chunk,3,H,W)
+                x = (x.clamp(-1, 1) + 1) * 0.5
+                frames.append(x.contiguous().cpu())
+            frames = torch.cat(frames, dim=0)
+
+    return frames  # (T,3,H,W)
 
 
 @torch.no_grad()
-def decode_audio_latents_to_mel(a_vae, a_latents, scaling):
+def decode_audio_latents_to_mel(a_vae, a_latents: torch.Tensor, scaling: float) -> torch.Tensor:
+    """
+    a_latents: (1, Ca, Ha, Wa)
+    Returns mel image: (Ha, Wa) in [0,1]
+    """
     device = next(a_vae.parameters()).device
     weight_dtype = next(a_vae.parameters()).dtype
     za = (a_latents / scaling).to(device=device, dtype=weight_dtype)
-    x = a_vae.decode(za).sample
+    x = a_vae.decode(za).sample  # (1,1,Ha,Wa) or (1,C,Ha,Wa) but we expect C=1
     x = (x.clamp(-1, 1) + 1) * 0.5
     return x[0, 0].detach().cpu()
 
 
-def mel_to_waveform(mel_img, sr, n_mels, hop, win, fmin, fmax):
+def mel_to_waveform(
+    mel_img: torch.Tensor, sr: int, n_mels: int, hop: int, win: int, fmin: float, fmax: float
+):
     if not HAVE_TA:
         print("[audio][warn] torchaudio not available; skipping WAV decode.")
         return None
@@ -228,15 +318,15 @@ def mel_to_waveform(mel_img, sr, n_mels, hop, win, fmin, fmax):
     return wav
 
 
-def write_video_mp4(frames, out_path, fps):
+def write_video_mp4(frames: torch.Tensor, out_path: Path, fps: float):
     if not HAVE_TVIO:
         raise RuntimeError("torchvision is required to write MP4.")
-    frames_u8 = (frames.clamp(0, 1) * 255).to(torch.uint8)
-    frames_thwc = frames_u8.permute(0, 2, 3, 1).contiguous().cpu()
+    frames_u8 = (frames.clamp(0, 1) * 255).to(torch.uint8)  # (T,3,H,W)
+    frames_thwc = frames_u8.permute(0, 2, 3, 1).contiguous().cpu()  # (T,H,W,3)
     tvio.write_video(str(out_path), frames_thwc, fps=fps, video_codec="h264", options={"crf": "18"})
 
 
-def write_wav(wav, sr, out_path):
+def write_wav(wav: torch.Tensor, sr: int, out_path: Path):
     if wav is None:
         return
     import soundfile as sf
@@ -274,7 +364,7 @@ def mux_audio_into_mp4(mp4_path: Path, wav_path: Path, out_path: Path) -> bool:
 
 
 # -------------------- Env overrides --------------------
-def _env_override(cfg):
+def _env_override(cfg: dict):
     # top-level basics
     if os.getenv("JOINTDIT_CKPT"):
         cfg["ckpt"] = os.getenv("JOINTDIT_CKPT")
@@ -342,7 +432,7 @@ def _env_override(cfg):
 
 
 # Manual shapes if no ref_meta is supplied
-def _shapes_from_manual(cfg, v_vae_scale, a_vae_scale):
+def _shapes_from_manual(cfg: dict, v_vae_scale: float, a_vae_scale: float):
     m = cfg.get("manual_shapes", {})
     if not m:
         return None
@@ -373,14 +463,17 @@ def main():
     cfg = load_yaml(args.cfg)
     _env_override(cfg)
 
-    device = cfg["runtime"]["device"]
+    device = torch.device(cfg["runtime"]["device"])
     out_dir = Path(cfg.get("out_dir", cfg.get("out", {}).get("dir", "./outputs")))
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # model config from ckpt (preferred) or day05 config fallback
     ckpt = torch.load(cfg["ckpt"], map_location="cpu")
-    if "cfg" in ckpt and "model" in ckpt["cfg"]:
+    if "cfg" in ckpt and "model" in ckpt:
         mcfg = ckpt["cfg"]["model"]
+    elif "cfg" in ckpt and "cfg" in ckpt["cfg"] and "model" in ckpt["cfg"]["cfg"]:
+        # Just-in-case some trainers pack differently
+        mcfg = ckpt["cfg"]["cfg"]["model"]
     else:
         mcfg = load_yaml(str(Path(__file__).resolve().parents[2] / "configs" / "day05_train.yaml"))[
             "model"
@@ -431,7 +524,7 @@ def main():
     seeds = cfg.get("seeds", [0])
     steps = int(cfg["steps"])
 
-    # log-space sigmas
+    # log-space sigmas (simple Karras/DDPM-ish schedule)
     sig_v = torch.exp(torch.linspace(math.log(1.0), math.log(1e-3), steps + 1, device=device))
     sig_a = torch.exp(torch.linspace(math.log(1.0), math.log(1e-3), steps + 1, device=device))
 
@@ -508,6 +601,9 @@ def main():
 
         with torch.no_grad():
             for i in range(steps):
+                if (i % max(1, steps // 10) == 0) or (i == steps - 1):
+                    print(f"[sample] step {i+1}/{steps}", flush=True)
+
                 s_v, s_v_next = sig_v[i], sig_v[i + 1]
                 s_a, s_a_next = sig_a[i], sig_a[i + 1]
 
@@ -528,9 +624,9 @@ def main():
                 v_t = x0_to_next_xt(v_t, v0_hat, s_v, s_v_next)
                 a_t = x0_to_next_xt(a_t, a0_hat, s_a, s_a_next)
 
-        # final x0
-        v0 = v0_hat[0].detach().cpu()
-        a0 = a0_hat[0:1].detach().cpu()
+        # final x0 (remove batch dim for video; keep 1x for audio latent)
+        v0 = v0_hat[0].detach().cpu()  # (T,C,H,W)
+        a0 = a0_hat[0:1].detach().cpu()  # (1,C,H,W)
 
         print(f"[decode] video {tuple(v0.shape)}  audio {tuple(a0.shape)}")
         v_frames = decode_video_latents(v_vae, v0, v_scale)
@@ -546,8 +642,8 @@ def main():
         )
 
         stem = f"seed{int(seed):03d}_steps{steps}"
-        mp4_path = Path(cfg["out_dir"]) / f"{stem}.mp4"
-        wav_path = Path(cfg["out_dir"]) / f"{stem}.wav"
+        mp4_path = out_dir / f"{stem}.mp4"
+        wav_path = out_dir / f"{stem}.wav"
 
         if HAVE_TVIO:
             write_video_mp4(v_frames, mp4_path, fps=fps)
@@ -557,7 +653,7 @@ def main():
             print(f"[out] {wav_path}")
 
         if HAVE_TVIO and wav is not None:
-            av_path = Path(cfg["out_dir"]) / f"{stem}_av.mp4"
+            av_path = out_dir / f"{stem}_av.mp4"
             if mux_audio_into_mp4(mp4_path, wav_path, av_path):
                 print(f"[out] {av_path}")
 
