@@ -18,6 +18,30 @@ From-scratch implementation of a **Joint Diffusion Transformer** that generates 
 
 ---
 
+## Architecture and Design Notes
+
+JointDiT follows the **Input–Joint–Output** block design from the paper. We integrate a pre-trained video diffusion UNet and a pre-trained audio diffusion UNet, inserting **JointBlocks** (transformer-based cross-modality blocks) between their layers. Each JointBlock performs a full cross-modal attention and separate feed-forward on each modality’s tokens.
+
+- **Input Block:** The first layer of each UNet is used as an input encoder for that modality. In our implementation, we bypass the original conv layer and instead **flatten each latent** and apply a linear projection (video 4→256 dims, audio 8→256 dims). This produces token sequences for each modality (preserving spatial/temporal positions) that enter the JointBlocks. *(This is a simplification: a linear projection on channels acts similar to a 1x1 conv. It avoids heavy computation from the original model’s first conv.)*
+
+- **Joint Blocks:** We have `N` JointBlocks (configurable, e.g. 2). Each JointBlock performs:
+  1. **Modality-specific pre-norm & self-attention** (within the JointBlock’s attention, we effectively allow each modality’s queries to attend to a combined set of keys).
+  2. **Full cross-modal attention** – the core of JointDiT. Using a Perceiver-style mechanism, video and audio tokens attend jointly to each other. This enables fine-grained sync: e.g., an audio token at time *t* can attend to video frame tokens at time *t* (and all others), and vice versa.
+  3. **Extra context conditioning (optional):** If CLIP text/image embeddings are provided, they are added as additional keys/values in the attention. This guides the generation with semantic context.
+  4. **Modality-specific feed-forward**: After attention, each modality’s tokens pass through its own feed-forward network (MLP) to process intra-modal information, then residual connections complete the transformer block structure.
+  
+  <small>*Each sub-layer (attention or MLP) is preceded by a LayerNorm (one per modality path). In the paper, an adaptive LayerNorm (AdaLN) is used:contentReference[oaicite:10]{index=10}; in our code we use standard LN here, with adaptability handled by the next point.*</small>
+
+- **Output Block:** The last layers of each UNet act as decoders for their modality. In JointDiT, after the final JointBlock, we map tokens back to the original latent shapes. We apply a series of lightweight adaptive normalization layers (`LazyAdaLN`) corresponding to the original UNet’s remaining layers, then a linear projection back to the UNet’s channel count (video 256→4, audio 256→8). This yields the denoised latents $\hat{v}_0$ and $\hat{a}_0$.
+
+**Pre-trained Weights Usage:** We load the original video and audio diffusion models (e.g., Stable Video Diffusion and AudioLDM2). To preserve their knowledge:
+- In **Stage A (initial joint training)**, we **freeze** the pre-trained model parameters. We do *not* modify the original conv weights; instead, we learn the JointBlocks and adaptive norms on top. Notably, our current code does not execute the heavy UNet convolutions for intermediate layers during Stage A – it relies on the AdaLN layers to adjust the activations as placeholders. This keeps Stage A fast and memory-light, but it means the original model’s transformations beyond the first layer are initially bypassed.
+- In **Stage B (fine-tuning)**, we **unfreeze or incorporate** parts of the original models. You can configure which layers to fine-tune. By default, we enable training for the JointBlocks (the cross-modal transformer) and can optionally unfreeze the Input/Output projections (`JOINTDIT_UNFREEZE_IO` flag) or specific UNet blocks. The idea is to gradually re-introduce the original model’s capacity. For example, one might unfreeze the “Expert” layers (the layers around where JointBlocks plug in) so the model can jointly adjust those features.
+
+**Known Limitations:** Currently, the implementation doesn’t feed activations through the actual conv layers of the Expert/Output blocks during joint training. This is an area for improvement. In theory, incorporating those layers (at least in inference or Stage B) should yield higher fidelity results, since the UNet’s later layers are trained for decoding details. Our minimalist approach of using multiple AdaLNs as placeholders means the model must learn more within the transformer to compensate. If you find the generated video or audio quality is lacking fine details, this could be a reason. Future updates may integrate the UNet’s convolutional forward passes fully, trading off compute for quality.
+
+---
+
 ## Quickstart
 
 ### 1) Environment (no Docker)
