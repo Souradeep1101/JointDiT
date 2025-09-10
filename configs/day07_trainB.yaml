@@ -1,3 +1,4 @@
+# configs/day07_trainB.yaml
 runtime:
   device: "cuda"
   dtype: "fp16"
@@ -9,43 +10,48 @@ data:
 
 loader:
   batch_size: 1
-  num_workers: 2
+  num_workers: 0
   pin_memory: true
 
+# ---- MUST MATCH STAGE-A ----
 model:
-  d_model: 256
-  heads: 8
-  n_blocks: 6
-  ff_mult: 4
+  d_model: 192          # same as Stage-A
+  heads: 6              # same as Stage-A
+  n_blocks: 2           # same as Stage-A
+  ff_mult: 4            # same as Stage-A (4 * d_model)
   attn_dropout: 0.0
   ff_dropout: 0.0
   rope_video: true
   rope_audio: true
 
-# Stage-B knobs: which experts to unfreeze + tiny LR
+# Stage-B: freeze most weights; unfreeze select experts + IO
 stageB:
-  unfreeze_blocks: [2, 3]
+  unfreeze_blocks: [0, 1]   # n_blocks=2 => unfreeze both
   unfreeze_io: true         # also unfreeze in/out projections
-  lr_expert: 1.0e-5
-  lr_io: 2.0e-5
+  lr_expert: 2.0e-5         # lower than Stage-A
+  lr_io: 5.0e-5             # slightly higher for in/out projections
 
 optim:
   amp: true
   grad_accum: 1
-  lr_main: 1.0e-5     # fallback if a param isn't matched into a group
+  lr_main: 1.0e-5           # fallback LR for any unmatched params
   betas: [0.9, 0.999]
   weight_decay: 0.01
   log_every: 10
   ckpt_every: 200
-  max_steps: 1000
+  max_steps: 5000           # can be overridden by train.sh
 
+# Use the SAME noise schedule as Stage-A
 schedule:
-  edm_P_mean: 0.0
-  edm_P_std: 1.0
-  sigma_video_min: 1.0e-3
+  # EDM (video)
+  edm_P_mean: -1.2
+  edm_P_std: 1.2
+  sigma_video_min: 0.01
   sigma_video_max: 1.0
-  sigma_audio_min: 1.0e-3
-  sigma_audio_max: 1.0
+
+  # Audio "DDPM-like"
+  sigma_audio_min: 0.01
+  sigma_audio_max: 0.5
 
 loss:
   lambda_v: 1.0

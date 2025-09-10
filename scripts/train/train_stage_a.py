@@ -305,7 +305,7 @@ def main():
                 "scaler": scaler.state_dict() if amp_enabled else {},
                 "cfg": cfg,
             }
-            outp = ckpt_dir | Path(f"ckpt_step_{step:06d}.pt")
+            outp = outp = ckpt_dir / f"ckpt_step_{step:06d}.pt"
             torch.save(ck, outp)
             print(f"[ckpt] {outp}")
 

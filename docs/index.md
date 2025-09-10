@@ -1,25 +1,58 @@
-# JointDiT — Project Overview
+# JointDiT: Image → Sounding-Video (I2SV)
 
-This repository implements a Joint Diffusion Transformer (JointDiT) pipeline that **animates a static image and generates synchronized audio** from it (I2SV: image → sounding video). It integrates pretrained video and audio diffusion experts and introduces cross‑modal interaction for temporally aligned outputs.
+JointDiT is a compact research repo that turns a single image (plus optional text) into a **short video with synchronized audio**. It reuses the VAEs from **Stable Video Diffusion** (video) and **AudioLDM2** (audio), adds **Joint Blocks** (a cross-modal Transformer), and uses **JointCFG** for guidance at inference.
 
-## Goals
-- Reproduce key components: input → N×JointBlocks → output
-- Validate modes: `full`, `iso_v`, `iso_a`
-- Provide reproducible training/inference scripts and day‑by‑day progress via notebooks
+## Highlights
+- **One pass, two modalities**: predict video & audio latents together (no pipeline hand-off).
+- **Joint Blocks**: cross-modal attention over flattened video/audio tokens; optional CLIP text & image conditions.
+- **Works on a single 48 GB GPU**: via query chunking, KV downsampling, and CUDA expandable segments.
+- **Batteries included**: dataset helpers, latent caching, Stage-A/B training recipes, CLI + Gradio UI.
 
-## How it works (high level)
-- **Input Block:** modality‑specific preprocessing for video/audio latents
-- **Joint Blocks:** modality experts + a cross‑modal full‑attention layer for **fine‑grained V↔A interaction**
-- **Output Block:** decoders back to clean video/audio latents
+> **Note on current gaps vs. paper**
+> The slicer “Input/Output/Expert” calls from the pretrained UNets are stubs in this codebase, and AdaLN isn’t fully wired to diffusion time/conditions yet—so quality is currently Transformer-only over VAE latents, not UNet-polished outputs. :contentReference[oaicite:0]{index=0} :contentReference[oaicite:1]{index=1}
 
-```mermaid
-graph TD
-  A[Image (frame 0)] --> B[Video VAE → latents]
-  A --> C[CLIP / Audio cond.]
-  B --> D[Joint Blocks: V/A Experts + Perceiver-like Joint Attention]
-  C --> D
-  D --> E[Video/Audio Output Blocks]
-  E --> F[Sounding Video]
+## Repo layout
 ```
 
-> For the conceptual foundation of JointDiT and JointCFG/JointCFG*, see the referenced paper in this repository’s docs.
+configs/          # training & infer configs
+models/           # JointDiT core + attention
+scripts/data/     # dataset + latent caching
+scripts/train/    # Stage A/B
+scripts/infer/    # CLI + helpers (UI uses this)
+scripts/ui/       # Gradio app
+
+````
+
+## Quickstart
+
+```bash
+# 0) env
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+
+# 1) fetch VAE weights (SVD + AudioLDM2)
+make fetch-models
+
+# 2) cache latents (mini)
+make cache-train
+make cache-val
+
+# 3) smoke
+make smoke-day06             # inference smoke
+make day7-smoke              # Stage-B smoke (100 steps)
+
+# 4) train long
+make final-train-b           # uses autoscaled VRAM settings
+# or: make final-train-b-keepenv JOINTDIT_* overrides
+
+# 5) run UI
+make ui
+````
+
+## What’s JointCFG?
+
+Guidance that **subtracts the “modality-isolated” predictions** from the full joint prediction so samples obey conditions *and* stay A/V-consistent; paper also proposes JointCFG\*. &#x20;
+
+## License / Intended use
+
+Research & educational. See `LICENSE`. Contributions welcome.

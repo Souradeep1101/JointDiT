@@ -28,6 +28,11 @@ IMAGE              ?=            # optional path to an override image for CLIP
 CLIP_MODEL         ?= ViT-B-16   # open_clip model name/variant
 CLIP_PRETRAINED    ?= openai     # open_clip pretrained tag
 
+# ----- Stage-B init knobs -----
+INIT_FROM      ?= auto      # can be: auto | <dir> | <file.pt>
+ALLOW_SCRATCH  ?= 0         # 1 = allow training Stage-B without Stage-A init
+
+
 # =========================================================
 # Model fetching (kept out of git)
 # - Uses Hugging Face snapshot_download to populate:
@@ -142,26 +147,30 @@ FORCE_KEEP_USER_ENVS ?= 0
 final-train-a:
 	. .venv/bin/activate && \
 	FORCE_KEEP_USER_ENVS=$(FORCE_KEEP_USER_ENVS) PYTHONPATH=. scripts/finals/train.sh \
-	  --stage A --cfg configs/day05_train.yaml --max-steps 25 \
-	  --ckpt-suffix finalA --log-suffix finalA
+	  --stage A --cfg configs/day05_train.yaml --max-steps 1500 \
+	  --ckpt-suffix finalA --log-suffix finalA $(EXTRA)
 
 final-train-a-keepenv:
 	. .venv/bin/activate && \
 	FORCE_KEEP_USER_ENVS=1 PYTHONPATH=. scripts/finals/train.sh \
 	  --stage A --cfg configs/day05_train.yaml --max-steps 25 \
-	  --ckpt-suffix finalA --log-suffix finalA
+	  --ckpt-suffix finalA --log-suffix finalA $(EXTRA)
 
 final-train-b:
 	. .venv/bin/activate && \
 	FORCE_KEEP_USER_ENVS=$(FORCE_KEEP_USER_ENVS) PYTHONPATH=. scripts/finals/train.sh \
-	  --stage B --cfg configs/day07_trainB.yaml --max-steps 1000 \
-	  --ckpt-suffix finalB --log-suffix finalB
+	  --stage B --cfg configs/day07_trainB.yaml --max-steps 5000 \
+	  --ckpt-suffix finalB --log-suffix finalB \
+	  --init-from "$(INIT_FROM)" $(if $(filter 1,$(ALLOW_SCRATCH)),--allow-scratch,) \
+	  $(EXTRA)
 
 final-train-b-keepenv:
 	. .venv/bin/activate && \
 	FORCE_KEEP_USER_ENVS=1 PYTHONPATH=. scripts/finals/train.sh \
 	  --stage B --cfg configs/day07_trainB.yaml --max-steps 1000 \
-	  --ckpt-suffix finalB --log-suffix finalB
+	  --ckpt-suffix finalB --log-suffix finalB \
+	  --init-from "$(INIT_FROM)" $(if $(filter 1,$(ALLOW_SCRATCH)),--allow-scratch,) \
+	  $(EXTRA)
 
 # A memory-safe Stage-B run that preserves these envs (KEEP=1)
 final-train-b-safe:
@@ -173,8 +182,10 @@ final-train-b-safe:
 	JOINTDIT_KV_DOWNSAMPLE=$(SAFE_KV_DOWNSAMPLE) \
 	PYTORCH_CUDA_ALLOC_CONF="$(SAFE_ALLOC_CONF)" \
 	PYTHONPATH=. scripts/finals/train.sh \
-	  --stage B --cfg configs/day07_trainB.yaml --max-steps 1000 \
-	  --ckpt-suffix finalB --log-suffix finalB
+	  --stage B --cfg configs/day07_trainB.yaml --max-steps 5000 \
+	  --ckpt-suffix finalB --log-suffix finalB \
+	  --init-from "$(INIT_FROM)" $(if $(filter 1,$(ALLOW_SCRATCH)),--allow-scratch,) \
+	  $(EXTRA)
 
 # =========================================================
 # UI (Gradio)
@@ -227,7 +238,7 @@ deps-media:
 	. .venv/bin/activate && pip install -q gdown
 
 fetch-avsync15-1s: deps-media
-	. .venv/bin/activate && PYTHONPATH=. python scripts/data/fetch_avsync15_1s.py --folder-url "$(FOLDER_URL)" --limit-train 3 --limit-val 1
+	. .venv/bin/activate && PYTHONPATH=. python scripts/data/fetch_avsync15_1s.py --folder-url "$(FOLDER_URL)" --limit-train 1000 --limit-val 200
 
 # =========================================================
 # System deps (Ubuntu/Debian)

@@ -1,3 +1,4 @@
+# configs/day05_train.yaml
 runtime:
   device: "cuda"
   dtype: "fp16"         # "fp16" or "fp32"
